@@ -168,6 +168,11 @@ export default function Dashboard() {
         </div>
       </section>
 
+      <RecentSessions
+        sessions={recentData?.items ?? []}
+        description={hasRangeFilter ? "当前筛选区间内按开始时间倒序展示最近会话。" : undefined}
+      />
+
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <StatCard
           label="会话数"
@@ -288,11 +293,6 @@ export default function Dashboard() {
           <WorkspacePanel workspaces={data.workspaces} />
         </div>
       </section>
-
-      <RecentSessions
-        sessions={recentData?.items ?? []}
-        description={hasRangeFilter ? "当前筛选区间内按开始时间倒序展示最近会话。" : undefined}
-      />
 
       <section className="surface p-4">
         <div className="grid gap-4 md:grid-cols-3">

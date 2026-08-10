@@ -202,6 +202,7 @@ async function main() {
 
   child.on("exit", (code, signal) => {
     if (signal) {
+      process.removeAllListeners(signal);
       process.kill(process.pid, signal);
       return;
     }

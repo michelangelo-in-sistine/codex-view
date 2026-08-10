@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, FolderKanban, Github, MoveRight } from "lucide-react";
+import { useState } from "react";
+import { BarChart3, FolderKanban, Github, LogOut, MoveRight } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 
 const navItems = [
@@ -18,6 +19,21 @@ function navClass(active: boolean) {
 
 export function AppHeader() {
   const pathname = usePathname();
+  const [isShuttingDown, setIsShuttingDown] = useState(false);
+
+  async function shutdown() {
+    if (!window.confirm("确定要退出 codex-view 吗？退出后需要重新运行命令才能访问。")) return;
+
+    setIsShuttingDown(true);
+
+    try {
+      const response = await fetch("/api/shutdown", { method: "POST" });
+      if (!response.ok) throw new Error(`退出请求失败（${response.status}）`);
+    } catch (error) {
+      setIsShuttingDown(false);
+      window.alert(error instanceof Error ? error.message : "退出请求失败");
+    }
+  }
 
   return (
     <header className="mb-8 border-b border-[color:var(--line)] pb-5">
@@ -51,6 +67,15 @@ export function AppHeader() {
                 </Link>
               );
             })}
+            <button
+              type="button"
+              onClick={shutdown}
+              disabled={isShuttingDown}
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-[color:var(--line)] bg-transparent px-3 text-sm text-[var(--muted)] transition-colors hover:border-[color:var(--line-strong)] hover:bg-[var(--panel)] hover:text-[var(--ink)] disabled:cursor-wait disabled:opacity-60"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>{isShuttingDown ? "正在退出…" : "退出"}</span>
+            </button>
           </nav>
           <Link
             href="https://github.com/vicksiyi/codex-view"

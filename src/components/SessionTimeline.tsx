@@ -34,6 +34,14 @@ type DisplayBlock =
 
 type FilterKey = "user" | "assistant" | "tool" | "error" | "other";
 
+const DEFAULT_FILTERS: Record<FilterKey, boolean> = {
+  user: true,
+  assistant: true,
+  tool: false,
+  error: false,
+  other: false
+};
+
 const ROLE_FILTERS = [
   { key: "user", label: "用户", icon: MessageSquare },
   { key: "assistant", label: "助手", icon: Bot },
@@ -120,6 +128,14 @@ function previewText(text: string, maxChars = 900, maxLines = 14) {
     return `${joined.slice(0, maxChars)}\n...`;
   }
   return joined;
+}
+
+function tocText(text: string, maxChars = 50) {
+  const normalized = text.replace(/\s+/g, " ").trim() || "（空白输入）";
+  const characters = Array.from(normalized);
+
+  if (characters.length <= maxChars) return normalized;
+  return `${characters.slice(0, maxChars - 3).join("")}...`;
 }
 
 function formatTokenUsage(prefix: string, usage: TokenUsage | null | undefined) {
@@ -279,14 +295,8 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
     `/api/session/${encodeURIComponent(sessionId)}`,
     fetchJson
   );
-  const [filters, setFilters] = useState({
-    user: true,
-    assistant: true,
-    tool: true,
-    error: true,
-    other: false
-  });
-  const [toolsCollapsedByDefault, setToolsCollapsedByDefault] = useState(false);
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [toolsCollapsedByDefault, setToolsCollapsedByDefault] = useState(true);
   const [toolCollapseOverrides, setToolCollapseOverrides] = useState<Record<string, boolean>>({});
 
   const displayEvents = useMemo(() => attachTokenCounters(data?.events ?? []), [data?.events]);
@@ -296,9 +306,23 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
     [displayBlocks]
   );
   const toolGroupCount = useMemo(() => assistantGroups.filter((block) => block.tools.length > 0).length, [assistantGroups]);
+  const userTocEntries = useMemo(() => {
+    let turn = 0;
+
+    return displayBlocks.flatMap((block) => {
+      if (block.kind !== "user") return [];
+      turn += 1;
+      return [{ id: `user-turn-${turn}`, event: block.event, label: tocText(block.event.text ?? "") }];
+    });
+  }, [displayBlocks]);
+  const userAnchorIds = useMemo(
+    () => new Map(userTocEntries.map((entry) => [entry.event, entry.id])),
+    [userTocEntries]
+  );
 
   useEffect(() => {
-    setToolsCollapsedByDefault(false);
+    setFilters(DEFAULT_FILTERS);
+    setToolsCollapsedByDefault(true);
     setToolCollapseOverrides({});
   }, [sessionId]);
 
@@ -362,6 +386,18 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
     });
   }
 
+  function navigateToUser(event: React.MouseEvent<HTMLAnchorElement>, id: string) {
+    event.preventDefault();
+    setFilters((current) => (current.user ? current : { ...current, user: true }));
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.history.replaceState(null, "", `#${id}`);
+      });
+    });
+  }
+
   if (error) {
     return <section className="surface p-4 text-sm text-red-700">时间线加载失败：{String(error)}</section>;
   }
@@ -421,7 +457,8 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
         </div>
       </section>
 
-      <section className="surface p-4">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem] xl:grid-cols-[minmax(0,1fr)_18rem]">
+      <section className="surface min-w-0 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[color:var(--line)] bg-[var(--panel)] p-1">
             {ROLE_FILTERS.map((filter) => {
@@ -479,7 +516,11 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
               const event = block.event;
 
               return (
-                <div key={`${block.kind}-${event.ts}-${index}`} className="rounded-lg border border-[color:var(--line)] bg-white/70 p-4">
+                <div
+                  key={`${block.kind}-${event.ts}-${index}`}
+                  id={block.kind === "user" ? userAnchorIds.get(event) : undefined}
+                  className="scroll-mt-6 rounded-lg border border-[color:var(--line)] bg-white/70 p-4"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="inline-flex items-center gap-2 rounded-md border border-[color:var(--line)] bg-[var(--panel)] px-2.5 py-1 text-xs font-medium text-[var(--ink)]">
                       <span
@@ -604,6 +645,36 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
           })}
         </div>
       </section>
+
+      <aside className="surface max-h-[calc(100dvh-3rem)] overflow-y-auto p-4 lg:sticky lg:top-6">
+        <div className="border-b border-[color:var(--line)] pb-3">
+          <h3 className="text-sm font-semibold text-[var(--ink)]">目录</h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">用户输入 · {formatInt(userTocEntries.length)}</p>
+        </div>
+
+        {userTocEntries.length ? (
+          <nav aria-label="用户输入目录" className="mt-3">
+            <ol className="space-y-1">
+              {userTocEntries.map((entry, index) => (
+                <li key={entry.id}>
+                  <a
+                    href={`#${entry.id}`}
+                    title={entry.event.text ?? ""}
+                    onClick={(event) => navigateToUser(event, entry.id)}
+                    className="group flex gap-2 rounded-md px-2 py-2 text-sm leading-5 text-[var(--muted)] transition-colors hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
+                  >
+                    <span className="mono shrink-0 text-xs leading-5 text-[var(--accent)]">{index + 1}.</span>
+                    <span className="break-words">{entry.label}</span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--muted)]">暂无用户输入。</p>
+        )}
+      </aside>
+      </div>
     </section>
   );
 }
