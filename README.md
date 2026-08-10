@@ -59,6 +59,24 @@ pnpm lint
 pnpm build
 ```
 
+打包并安装:
+```
+pnpm pack
+npm install -g ./codex-view-0.1.2.tgz --force
+```
+
+安装后验证并启动：
+```
+codex-view --version
+codex-view --no-open
+```
+
+卸载：
+```
+  npm uninstall -g codex-view
+```
+
+
 ## 数据目录和缓存
 
 默认会话目录为 `~/.codex/sessions`，默认缓存目录为 `~/.codex-view/cache`。可以通过环境变量覆盖：
@@ -73,16 +91,8 @@ pnpm dev
 
 会话历史可能包含提示词、工作目录和工具输出等敏感内容，请勿提交或公开缓存及原始 JSONL 文件。
 
-## 全局安装
 
-```bash
-npm install -g codex-view
-codex-view
-```
-
-CLI 默认绑定 `127.0.0.1`，从 `3000` 开始在连续 50 个端口中选择可用端口，服务就绪后自动打开浏览器。可以在页面顶部点击“退出”，或在终端按 `Ctrl+C` 停止服务。
-
-可用命令和参数：
+## 可用命令和参数
 
 ```text
 codex-view [options]
