@@ -1,6 +1,6 @@
 # codex-view
 
-本地 Codex CLI 会话历史可视化面板。
+本地 Codex CLI 会话历史可视化面板。 fork from: `github.com/vicksiyi/codex-view`
 
 `codex-view` 会递归读取 Codex 会话目录中的 JSONL 文件，增量建立 SQLite 索引，并提供会话统计、检索和时间线查看界面。所有会话内容和缓存都保留在本机。
 
@@ -12,6 +12,29 @@
 - 会话时间线：查看用户消息、助手消息、工具调用及输出、错误和 Token 计数
 - 时间线浏览：按事件类型显示或隐藏内容，将工具调用与对应输出分组、批量折叠或展开，并通过用户输入目录快速跳转
 - 自动更新：运行期间定期增量扫描新增或有变更的会话文件
+
+## Fork修改
+
+- 会话列表显示会话名字;
+- 详细会话页面显示用户输入提示词的目录;
+- 详细会话默认不开启"工具"和"错误";
+- 页面增加"退出"按钮;
+
+## 页面截图
+
+以下截图基于本机 `~/.codex/sessions` 的真实数据生成。
+
+### 总览页
+
+![codex-view dashboard](docs/screenshots/dashboard.png)
+
+### 会话列表页
+
+![codex-view sessions list](docs/screenshots/sessions.png)
+
+### 会话详情页
+
+![codex-view session timeline](docs/screenshots/timeline.png)
 
 ## 环境要求
 
