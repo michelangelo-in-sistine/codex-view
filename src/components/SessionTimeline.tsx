@@ -245,6 +245,8 @@ function EventText({
   text: string;
   emptyLabel: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!text) {
     return (
       <div className="rounded-lg border border-dashed border-[color:var(--line)] p-3 text-sm text-[var(--muted)]">
@@ -258,14 +260,19 @@ function EventText({
 
   if (isLong) {
     return (
-      <details>
-        <summary className={`cursor-pointer rounded-lg border p-3 text-sm text-[var(--ink)] ${bubbleClass(kind)}`}>
-          <pre className="whitespace-pre-wrap break-words font-sans">{preview}</pre>
-        </summary>
-        <div className={`mt-2 rounded-lg border p-3 text-sm text-[var(--ink)] ${bubbleClass(kind)}`}>
-          <pre className="whitespace-pre-wrap break-words font-sans">{text}</pre>
-        </div>
-      </details>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+        className={`relative block w-full cursor-pointer rounded-lg border p-3 pr-10 text-left text-sm text-[var(--ink)] ${bubbleClass(kind)}`}
+      >
+        <pre className="whitespace-pre-wrap break-words font-sans">{expanded ? text : preview}</pre>
+        {expanded ? (
+          <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
+        ) : (
+          <ChevronRight className="absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
+        )}
+      </button>
     );
   }
 
