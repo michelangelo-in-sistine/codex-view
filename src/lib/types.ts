@@ -25,6 +25,8 @@ export type DailyAgg = {
 
 export type SessionSummary = {
   id: string;
+  name: string | null;
+  firstUserPrompt: string | null;
   file: string;
   startedAt: string | null;
   endedAt: string | null;

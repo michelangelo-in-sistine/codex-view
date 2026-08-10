@@ -38,6 +38,8 @@ export function migrateDb() {
       mtime_ms INTEGER NOT NULL,
       size INTEGER NOT NULL,
       session_id TEXT NOT NULL,
+      session_name TEXT,
+      first_user_prompt TEXT,
       daily_key TEXT NOT NULL,
       started_at TEXT,
       ended_at TEXT,
@@ -70,4 +72,12 @@ export function migrateDb() {
 
     CREATE INDEX IF NOT EXISTS idx_tool_counts_tool_name ON tool_counts(tool_name);
   `);
+
+  const fileColumns = database.prepare("PRAGMA table_info(files)").all() as { name: string }[];
+  if (!fileColumns.some((column) => column.name === "session_name")) {
+    database.exec("ALTER TABLE files ADD COLUMN session_name TEXT;");
+  }
+  if (!fileColumns.some((column) => column.name === "first_user_prompt")) {
+    database.exec("ALTER TABLE files ADD COLUMN first_user_prompt TEXT;");
+  }
 }

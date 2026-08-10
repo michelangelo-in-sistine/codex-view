@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import readline from "node:readline";
 import { dayStartToIso, hasDateRange, nextDayStartToIso, normalizeDateRange } from "@/lib/date-range";
-import { getCacheDir, getSessionsDir } from "@/lib/paths";
+import { getCacheDir, getSessionIndexFile, getSessionsDir } from "@/lib/paths";
 import { getDb, migrateDb } from "@/lib/sqlite";
 import type {
   DailyAgg,
@@ -16,9 +16,10 @@ import type {
   WorkspaceAgg
 } from "@/lib/types";
 
-const INDEX_VERSION = 1;
+const INDEX_VERSION = 2;
 const TIMELINE_CACHE_DIR = "timeline";
 const MAX_TIMELINE_EVENTS = 5000;
+const MAX_SESSION_PROMPT_LENGTH = 160;
 const REFRESH_INTERVAL_MS = 10_000;
 
 let snapshotCache: IndexSnapshot | null = null;
@@ -74,6 +75,16 @@ function dayKeyFromIso(iso: string | null) {
 
 function toNum(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function toSessionPromptExcerpt(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+
+  const characters = Array.from(normalized);
+  if (characters.length <= MAX_SESSION_PROMPT_LENGTH) return normalized;
+  return `${characters.slice(0, MAX_SESSION_PROMPT_LENGTH - 1).join("")}…`;
 }
 
 function normalizeTokenUsage(usage: any): TokenUsage {
@@ -141,11 +152,44 @@ async function listJsonlFiles(root: string) {
   return files;
 }
 
+async function readSessionNames() {
+  const names = new Map<string, string>();
+  let stream: fs.ReadStream;
+
+  try {
+    stream = fs.createReadStream(getSessionIndexFile(), "utf8");
+  } catch {
+    return names;
+  }
+
+  stream.on("error", () => undefined);
+  const reader = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+  try {
+    for await (const line of reader) {
+      const entry = safeJsonParse(line);
+      const id = typeof entry?.id === "string" ? entry.id : null;
+      const name = typeof entry?.thread_name === "string" ? entry.thread_name.trim() : "";
+      if (id && name) names.set(id, name);
+    }
+  } catch {
+    // A missing or concurrently updated optional index should not block session indexing.
+  }
+
+  return names;
+}
+
+function getCodexSessionId(sessionId: string) {
+  return sessionId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)?.[0] ?? sessionId;
+}
+
 function summarizeFromMeta(sessionId: string, file: string, meta: any): SessionSummary {
   const payload = meta?.payload ?? {};
 
   return {
     id: payload?.id ?? sessionId,
+    name: null,
+    firstUserPrompt: null,
     file,
     startedAt: toIso(meta?.timestamp) ?? toIso(payload?.timestamp),
     endedAt: null,
@@ -193,6 +237,8 @@ async function buildFileIndex(file: string) {
   let lastTs: string | null = null;
   let summary: SessionSummary = {
     id: sessionId,
+    name: null,
+    firstUserPrompt: null,
     file,
     startedAt: null,
     endedAt: null,
@@ -231,7 +277,9 @@ async function buildFileIndex(file: string) {
 
     if (event.type === "event_msg") {
       const payloadType = event.payload?.type;
-      if (payloadType === "turn_aborted") {
+      if (payloadType === "user_message" && !summary.firstUserPrompt) {
+        summary.firstUserPrompt = toSessionPromptExcerpt(event.payload?.message);
+      } else if (payloadType === "turn_aborted") {
         summary.errors += 1;
       } else if (payloadType === "token_count") {
         const totalUsage = normalizeTokenUsage(event.payload?.info?.total_token_usage);
@@ -354,6 +402,7 @@ async function refreshSqliteIndex() {
   await ensureDir(path.join(cacheDir, TIMELINE_CACHE_DIR));
 
   const files = await listJsonlFiles(sessionsDir);
+  const sessionNames = await readSessionNames();
   const knownFiles = new Set(files);
   const storedVersion = Number((database.prepare("SELECT value FROM meta WHERE key='version'").get() as any)?.value ?? 0);
   const rebuild = storedVersion !== INDEX_VERSION;
@@ -364,11 +413,11 @@ async function refreshSqliteIndex() {
   const upsertFile = database.prepare(`
     INSERT INTO files (
       file, mtime_ms, size, session_id, daily_key, started_at, ended_at, duration_sec,
-      cwd, originator, cli_version, messages, tool_calls, errors,
+      cwd, originator, cli_version, first_user_prompt, messages, tool_calls, errors,
       tokens_total, tokens_input, tokens_output, tokens_cached_input, tokens_reasoning_output
     ) VALUES (
       @file, @mtimeMs, @size, @sessionId, @dailyKey, @startedAt, @endedAt, @durationSec,
-      @cwd, @originator, @cliVersion, @messages, @toolCalls, @errors,
+      @cwd, @originator, @cliVersion, @firstUserPrompt, @messages, @toolCalls, @errors,
       @tokensTotal, @tokensInput, @tokensOutput, @tokensCachedInput, @tokensReasoningOutput
     )
     ON CONFLICT(file) DO UPDATE SET
@@ -382,6 +431,7 @@ async function refreshSqliteIndex() {
       cwd = excluded.cwd,
       originator = excluded.originator,
       cli_version = excluded.cli_version,
+      first_user_prompt = excluded.first_user_prompt,
       messages = excluded.messages,
       tool_calls = excluded.tool_calls,
       errors = excluded.errors,
@@ -396,6 +446,7 @@ async function refreshSqliteIndex() {
     VALUES (?, ?, ?)
     ON CONFLICT(file, tool_name) DO UPDATE SET count = excluded.count
   `);
+  const updateSessionName = database.prepare("UPDATE files SET session_name = ? WHERE file = ?");
 
   database.exec("BEGIN IMMEDIATE");
   try {
@@ -437,6 +488,7 @@ async function refreshSqliteIndex() {
         cwd: built.summary.cwd,
         originator: built.summary.originator,
         cliVersion: built.summary.cliVersion,
+        firstUserPrompt: built.summary.firstUserPrompt,
         messages: built.summary.messages,
         toolCalls: built.summary.toolCalls,
         errors: built.summary.errors,
@@ -451,6 +503,14 @@ async function refreshSqliteIndex() {
       for (const [toolName, count] of Object.entries(built.tools)) {
         upsertTool.run(file, toolName, count);
       }
+    }
+
+    const indexedFiles = database.prepare("SELECT file, session_id as sessionId FROM files").all() as {
+      file: string;
+      sessionId: string;
+    }[];
+    for (const row of indexedFiles) {
+      updateSessionName.run(sessionNames.get(getCodexSessionId(row.sessionId)) ?? null, row.file);
     }
 
     database.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('sessionsDir', ?)").run(sessionsDir);
@@ -644,9 +704,9 @@ export async function listSessions(options: {
 
   const q = options.q?.trim();
   if (q) {
-    where.push("(session_id LIKE ? OR IFNULL(cwd, '') LIKE ? OR IFNULL(originator, '') LIKE ?)");
+    where.push("(session_id LIKE ? OR IFNULL(session_name, '') LIKE ? OR IFNULL(first_user_prompt, '') LIKE ? OR IFNULL(cwd, '') LIKE ? OR IFNULL(originator, '') LIKE ?)");
     const like = `%${q}%`;
-    params.push(like, like, like);
+    params.push(like, like, like, like, like);
   }
 
   const whereSql = buildWhereSql(where);
@@ -655,6 +715,8 @@ export async function listSessions(options: {
     .prepare(`
       SELECT
         session_id as id,
+        session_name as name,
+        first_user_prompt as firstUserPrompt,
         file,
         started_at as startedAt,
         ended_at as endedAt,
@@ -682,6 +744,8 @@ export async function listSessions(options: {
     total: Number(totalRow.count ?? 0),
     items: rows.map((row) => ({
       id: String(row.id),
+      name: row.name ?? null,
+      firstUserPrompt: row.firstUserPrompt ?? null,
       file: String(row.file),
       startedAt: row.startedAt ?? null,
       endedAt: row.endedAt ?? null,
@@ -708,6 +772,8 @@ async function getSessionById(sessionId: string) {
     .prepare(`
       SELECT
         session_id as id,
+        session_name as name,
+        first_user_prompt as firstUserPrompt,
         file,
         started_at as startedAt,
         ended_at as endedAt,
@@ -733,6 +799,8 @@ async function getSessionById(sessionId: string) {
 
   return {
     id: String(row.id),
+    name: row.name ?? null,
+    firstUserPrompt: row.firstUserPrompt ?? null,
     file: String(row.file),
     startedAt: row.startedAt ?? null,
     endedAt: row.endedAt ?? null,
@@ -894,6 +962,8 @@ export async function getSessionTimeline(sessionId: string): Promise<SessionTime
     return {
       summary: {
         id: sessionId,
+        name: null,
+        firstUserPrompt: null,
         file: "",
         startedAt: null,
         endedAt: null,

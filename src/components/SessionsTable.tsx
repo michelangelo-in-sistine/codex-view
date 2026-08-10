@@ -86,7 +86,7 @@ export default function SessionsTable() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索 session id / cwd / originator"
+              placeholder="搜索会话名称 / 首条提示词 / session id / cwd / originator"
               className="h-11 w-full rounded-md border border-[color:var(--line)] bg-[var(--panel)] pl-10 pr-3 text-sm text-[var(--ink)] outline-none transition-colors placeholder:text-[var(--muted)] focus:border-[color:var(--line-strong)]"
             />
           </div>
@@ -141,10 +141,11 @@ export default function SessionsTable() {
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[1120px] text-sm">
+        <table className="w-full min-w-[1280px] text-sm">
           <thead className="text-left text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
             <tr>
               <th className="pb-3 font-medium">开始时间</th>
+              <th className="pb-3 font-medium">会话名称</th>
               <th className="pb-3 font-medium">时长</th>
               <th className="pb-3 font-medium">cwd</th>
               <th className="pb-3 text-right font-medium">消息数</th>
@@ -158,7 +159,7 @@ export default function SessionsTable() {
           <tbody className="divide-y divide-[color:var(--line)]">
             {data.items.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-6 text-[var(--muted)]">
+                <td colSpan={10} className="py-6 text-[var(--muted)]">
                   {hasAnyFilter ? "当前筛选条件下没有匹配会话。" : "没有匹配到会话。"}
                 </td>
               </tr>
@@ -166,6 +167,12 @@ export default function SessionsTable() {
               data.items.map((session) => (
                 <tr key={session.id}>
                   <td className="py-3 text-[var(--ink)]">{formatDateTime(session.startedAt)}</td>
+                  <td
+                    className={`max-w-64 truncate py-3 ${session.name ? "font-semibold text-emerald-800" : "text-[var(--ink)]"}`}
+                    title={session.name ? `自定义会话名称：${session.name}` : `首条用户提示：${session.firstUserPrompt ?? "—"}`}
+                  >
+                    {session.name ?? session.firstUserPrompt ?? "—"}
+                  </td>
                   <td className="mono py-3 text-[var(--muted)]">{formatDuration(session.durationSec)}</td>
                   <td className="py-3 text-[var(--muted)]" title={session.cwd ?? ""}>
                     {session.cwd ? truncateMiddle(session.cwd, 28, 14) : "—"}
