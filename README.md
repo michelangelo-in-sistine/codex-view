@@ -50,14 +50,15 @@ pnpm install
 pnpm dev
 ```
 
-Next.js 默认在 `http://localhost:3000` 启动开发服务器；如果端口已被占用，会选择其他可用端口。
-
 提交改动前可运行：
 
 ```bash
 pnpm lint
 pnpm build
+node bin/codex-view.js --no-open
 ```
+
+Next.js 默认在 `http://localhost:3000` 启动开发服务器；如果端口已被占用，会选择其他可用端口。
 
 打包并安装:
 ```

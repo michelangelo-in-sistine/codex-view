@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { ArrowLeft, Bot, ChevronDown, ChevronRight, CircleAlert, Hammer, MessageSquare, TerminalSquare } from "lucide-react";
+import {
+  ArrowLeft,
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  CornerRightUp,
+  Hammer,
+  MessageSquare,
+  TerminalSquare
+} from "lucide-react";
 import { fetchJson } from "@/lib/fetcher";
 import { formatDateTime, formatInt } from "@/lib/format";
 import type { SessionTimelineResponse, TokenUsage, TokenUsageInfo } from "@/lib/types";
@@ -260,19 +270,32 @@ function EventText({
 
   if (isLong) {
     return (
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((current) => !current)}
-        className={`relative block w-full cursor-pointer rounded-lg border p-3 pr-10 text-left text-sm text-[var(--ink)] ${bubbleClass(kind)}`}
+      <div
+        className={`relative rounded-lg border p-3 pr-12 text-sm text-[var(--ink)] ${expanded ? "pb-12" : ""} ${bubbleClass(kind)}`}
       >
-        <pre className="whitespace-pre-wrap break-words font-sans">{expanded ? text : preview}</pre>
+        <pre className="select-text whitespace-pre-wrap break-words font-sans">{expanded ? text : preview}</pre>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={expanded ? "折叠消息" : "展开消息"}
+          title={expanded ? "折叠消息" : "展开消息"}
+          onClick={() => setExpanded((current) => !current)}
+          className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/70 hover:text-[var(--ink)]"
+        >
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </button>
         {expanded ? (
-          <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
-        ) : (
-          <ChevronRight className="absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
-        )}
-      </button>
+          <button
+            type="button"
+            aria-label="折叠消息"
+            title="折叠消息"
+            onClick={() => setExpanded(false)}
+            className="absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/70 hover:text-[var(--ink)]"
+          >
+            <CornerRightUp className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
     );
   }
 

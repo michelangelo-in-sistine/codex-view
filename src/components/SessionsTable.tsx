@@ -141,7 +141,7 @@ export default function SessionsTable() {
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[1440px] text-sm">
+        <table className="w-full min-w-[1280px] text-sm">
           <thead className="text-left text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
             <tr>
               <th className="pb-3 font-medium">开始时间</th>
@@ -153,14 +153,13 @@ export default function SessionsTable() {
               <th className="pb-3 text-right font-medium">工具数</th>
               <th className="pb-3 text-right font-medium">错误数</th>
               <th className="pb-3 text-right font-medium">Token</th>
-              <th className="pb-3 font-medium">originator</th>
               <th className="pb-3 text-right font-medium">详情</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[color:var(--line)]">
             {data.items.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-6 text-[var(--muted)]">
+                <td colSpan={10} className="py-6 text-[var(--muted)]">
                   {hasAnyFilter ? "当前筛选条件下没有匹配会话。" : "没有匹配到会话。"}
                 </td>
               </tr>
@@ -183,7 +182,6 @@ export default function SessionsTable() {
                   <td className="mono py-3 text-right text-[var(--muted)]">{formatInt(session.toolCalls)}</td>
                   <td className="mono py-3 text-right text-[var(--muted)]">{formatInt(session.errors)}</td>
                   <td className="mono py-3 text-right text-[var(--muted)]">{formatInt(session.tokensTotal)}</td>
-                  <td className="py-3 text-[var(--muted)]">{session.originator ?? "—"}</td>
                   <td className="py-3 text-right">
                     <Link
                       href={`/sessions/${encodeURIComponent(session.id)}`}
