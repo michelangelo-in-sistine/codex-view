@@ -29,10 +29,11 @@ export function RecentSessions({
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[1060px] text-sm">
           <thead className="text-left text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
             <tr>
               <th className="pb-3 font-medium">开始时间</th>
+              <th className="pb-3 font-medium">最后对话时间</th>
               <th className="pb-3 font-medium">会话名称</th>
               <th className="pb-3 font-medium">时长</th>
               <th className="pb-3 font-medium">工作目录</th>
@@ -45,7 +46,7 @@ export function RecentSessions({
           <tbody className="divide-y divide-[color:var(--line)]">
             {sessions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-6 text-[var(--muted)]">
+                <td colSpan={9} className="py-6 text-[var(--muted)]">
                   暂无已索引会话。
                 </td>
               </tr>
@@ -53,6 +54,7 @@ export function RecentSessions({
               sessions.map((session) => (
                 <tr key={session.id}>
                   <td className="py-3 text-[var(--ink)]">{formatDateTime(session.startedAt)}</td>
+                  <td className="py-3 text-[var(--ink)]">{formatDateTime(session.endedAt)}</td>
                   <td
                     className={`max-w-56 truncate py-3 ${session.name ? "font-semibold text-emerald-800" : "text-[var(--ink)]"}`}
                     title={session.name ? `自定义会话名称：${session.name}` : `首条用户提示：${session.firstUserPrompt ?? "—"}`}

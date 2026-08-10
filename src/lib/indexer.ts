@@ -734,7 +734,10 @@ export async function listSessions(options: {
         tokens_reasoning_output as tokensReasoningOutput
       FROM files
       ${whereSql}
-      ORDER BY (started_at IS NULL), started_at DESC
+      ORDER BY
+        (COALESCE(ended_at, started_at) IS NULL),
+        COALESCE(ended_at, started_at) DESC,
+        started_at DESC
       LIMIT ? OFFSET ?
     `)
     .all(...params, limit, offset) as any[];

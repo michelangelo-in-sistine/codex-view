@@ -60,6 +60,7 @@ export function migrateDb() {
     CREATE INDEX IF NOT EXISTS idx_files_session_id ON files(session_id);
     CREATE INDEX IF NOT EXISTS idx_files_daily_key ON files(daily_key);
     CREATE INDEX IF NOT EXISTS idx_files_started_at ON files(started_at);
+    CREATE INDEX IF NOT EXISTS idx_files_ended_at ON files(ended_at);
     CREATE INDEX IF NOT EXISTS idx_files_cwd ON files(cwd);
 
     CREATE TABLE IF NOT EXISTS tool_counts (

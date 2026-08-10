@@ -170,7 +170,11 @@ export default function Dashboard() {
 
       <RecentSessions
         sessions={recentData?.items ?? []}
-        description={hasRangeFilter ? "当前筛选区间内按开始时间倒序展示最近会话。" : undefined}
+        description={
+          hasRangeFilter
+            ? "当前筛选区间内按最后对话时间倒序展示最近会话。"
+            : "按最后对话时间倒序展示最近索引到的运行记录，可快速进入详情。"
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">

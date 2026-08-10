@@ -141,10 +141,11 @@ export default function SessionsTable() {
       </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[1280px] text-sm">
+        <table className="w-full min-w-[1440px] text-sm">
           <thead className="text-left text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
             <tr>
               <th className="pb-3 font-medium">开始时间</th>
+              <th className="pb-3 font-medium">最后对话时间</th>
               <th className="pb-3 font-medium">会话名称</th>
               <th className="pb-3 font-medium">时长</th>
               <th className="pb-3 font-medium">cwd</th>
@@ -159,7 +160,7 @@ export default function SessionsTable() {
           <tbody className="divide-y divide-[color:var(--line)]">
             {data.items.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-6 text-[var(--muted)]">
+                <td colSpan={11} className="py-6 text-[var(--muted)]">
                   {hasAnyFilter ? "当前筛选条件下没有匹配会话。" : "没有匹配到会话。"}
                 </td>
               </tr>
@@ -167,6 +168,7 @@ export default function SessionsTable() {
               data.items.map((session) => (
                 <tr key={session.id}>
                   <td className="py-3 text-[var(--ink)]">{formatDateTime(session.startedAt)}</td>
+                  <td className="py-3 text-[var(--ink)]">{formatDateTime(session.endedAt)}</td>
                   <td
                     className={`max-w-64 truncate py-3 ${session.name ? "font-semibold text-emerald-800" : "text-[var(--ink)]"}`}
                     title={session.name ? `自定义会话名称：${session.name}` : `首条用户提示：${session.firstUserPrompt ?? "—"}`}
