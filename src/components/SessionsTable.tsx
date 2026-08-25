@@ -3,12 +3,51 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { ArrowLeft, ArrowRight, Search } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import { DateRangeFields } from "@/components/DateRangeFields";
 import { appendDateRangeSearchParams, normalizeDateRange } from "@/lib/date-range";
 import { fetchJson } from "@/lib/fetcher";
 import { formatDateTime, formatDuration, formatInt, truncateMiddle } from "@/lib/format";
-import type { SessionsListResponse } from "@/lib/types";
+import type { SessionSortBy, SessionsListResponse, SortDirection } from "@/lib/types";
+
+type Sorting = { by: SessionSortBy; order: SortDirection };
+
+function SortableHeader({
+  label,
+  column,
+  defaultOrder,
+  sorting,
+  align = "left",
+  onSort
+}: {
+  label: string;
+  column: SessionSortBy;
+  defaultOrder: SortDirection;
+  sorting: Sorting | null;
+  align?: "left" | "right";
+  onSort: (column: SessionSortBy, defaultOrder: SortDirection) => void;
+}) {
+  const active = sorting?.by === column;
+  const ariaSort = active ? (sorting.order === "asc" ? "ascending" : "descending") : "none";
+  const Icon = active ? (sorting.order === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  const nextOrder = active ? (sorting.order === "desc" ? "asc" : "desc") : defaultOrder;
+
+  return (
+    <th className={`pb-3 font-medium ${align === "right" ? "text-right" : ""}`} aria-sort={ariaSort}>
+      <button
+        type="button"
+        onClick={() => onSort(column, defaultOrder)}
+        className={`inline-flex items-center gap-1 rounded-sm transition-colors hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--line-strong)] ${
+          align === "right" ? "justify-end" : ""
+        } ${active ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}
+        title={`${label}：点击按${nextOrder === "desc" ? "降序" : "升序"}排列`}
+      >
+        <span>{label}</span>
+        <Icon className={`h-3.5 w-3.5 ${active ? "" : "opacity-45"}`} aria-hidden="true" />
+      </button>
+    </th>
+  );
+}
 
 export default function SessionsTable() {
   const [onlyWithTools, setOnlyWithTools] = useState(false);
@@ -17,6 +56,7 @@ export default function SessionsTable() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [offset, setOffset] = useState(0);
+  const [sorting, setSorting] = useState<Sorting | null>(null);
   const limit = 100;
   const filters = useMemo(() => normalizeDateRange({ start: startDate, end: endDate }), [endDate, startDate]);
 
@@ -31,14 +71,26 @@ export default function SessionsTable() {
     if (onlyWithErrors) searchParams.set("withErrors", "1");
     searchParams.set("limit", String(limit));
     searchParams.set("offset", String(offset));
+    if (sorting) {
+      searchParams.set("sortBy", sorting.by);
+      searchParams.set("sortOrder", sorting.order);
+    }
     return `/api/sessions?${searchParams.toString()}`;
-  }, [filters, limit, offset, onlyWithErrors, onlyWithTools, query]);
+  }, [filters, limit, offset, onlyWithErrors, onlyWithTools, query, sorting]);
 
   const { data, error, isLoading } = useSWR<SessionsListResponse>(key, fetchJson, {
     refreshInterval: 15_000
   });
   const hasRangeFilter = Boolean(filters.start || filters.end);
   const hasAnyFilter = hasRangeFilter || onlyWithErrors || onlyWithTools || query.trim();
+
+  function handleSort(column: SessionSortBy, defaultOrder: SortDirection) {
+    setSorting((current) => ({
+      by: column,
+      order: current?.by === column ? (current.order === "desc" ? "asc" : "desc") : defaultOrder
+    }));
+    setOffset(0);
+  }
 
   if (error) {
     return (
@@ -144,15 +196,15 @@ export default function SessionsTable() {
         <table className="w-full min-w-[1280px] text-sm">
           <thead className="text-left text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
             <tr>
-              <th className="pb-3 font-medium">开始时间</th>
-              <th className="pb-3 font-medium">最后对话时间</th>
-              <th className="pb-3 font-medium">会话名称</th>
-              <th className="pb-3 font-medium">时长</th>
-              <th className="pb-3 font-medium">cwd</th>
-              <th className="pb-3 text-right font-medium">消息数</th>
-              <th className="pb-3 text-right font-medium">工具数</th>
-              <th className="pb-3 text-right font-medium">错误数</th>
-              <th className="pb-3 text-right font-medium">Token</th>
+              <SortableHeader label="开始时间" column="startedAt" defaultOrder="desc" sorting={sorting} onSort={handleSort} />
+              <SortableHeader label="最后对话时间" column="endedAt" defaultOrder="desc" sorting={sorting} onSort={handleSort} />
+              <SortableHeader label="会话名称" column="name" defaultOrder="asc" sorting={sorting} onSort={handleSort} />
+              <SortableHeader label="时长" column="durationSec" defaultOrder="desc" sorting={sorting} onSort={handleSort} />
+              <SortableHeader label="cwd" column="cwd" defaultOrder="asc" sorting={sorting} onSort={handleSort} />
+              <SortableHeader label="消息数" column="messages" defaultOrder="desc" sorting={sorting} align="right" onSort={handleSort} />
+              <SortableHeader label="工具数" column="toolCalls" defaultOrder="desc" sorting={sorting} align="right" onSort={handleSort} />
+              <SortableHeader label="错误数" column="errors" defaultOrder="desc" sorting={sorting} align="right" onSort={handleSort} />
+              <SortableHeader label="Token" column="tokensTotal" defaultOrder="desc" sorting={sorting} align="right" onSort={handleSort} />
               <th className="pb-3 text-right font-medium">详情</th>
             </tr>
           </thead>

@@ -8,9 +8,11 @@ import { getDb, migrateDb } from "@/lib/sqlite";
 import type {
   DailyAgg,
   IndexSnapshot,
+  SessionSortBy,
   SessionSummary,
   SessionTimelineResponse,
   SessionsListResponse,
+  SortDirection,
   TimelineEvent,
   TokenUsage,
   WorkspaceAgg
@@ -21,6 +23,18 @@ const TIMELINE_CACHE_DIR = "timeline";
 const MAX_TIMELINE_EVENTS = 5000;
 const MAX_SESSION_PROMPT_LENGTH = 160;
 const REFRESH_INTERVAL_MS = 10_000;
+
+const SESSION_SORT_SQL: Record<SessionSortBy, { expression: string; collation?: string }> = {
+  startedAt: { expression: "started_at" },
+  endedAt: { expression: "ended_at" },
+  name: { expression: "COALESCE(session_name, first_user_prompt)", collation: "COLLATE NOCASE" },
+  durationSec: { expression: "duration_sec" },
+  cwd: { expression: "cwd", collation: "COLLATE NOCASE" },
+  messages: { expression: "messages" },
+  toolCalls: { expression: "tool_calls" },
+  errors: { expression: "errors" },
+  tokensTotal: { expression: "tokens_total" }
+};
 
 let snapshotCache: IndexSnapshot | null = null;
 let refreshPromise: Promise<void> | null = null;
@@ -686,6 +700,8 @@ export async function listSessions(options: {
   end?: string;
   limit?: number;
   offset?: number;
+  sortBy?: SessionSortBy;
+  sortOrder?: SortDirection;
 }): Promise<SessionsListResponse> {
   await ensureFreshIndex();
   const database = getDb();
@@ -710,6 +726,22 @@ export async function listSessions(options: {
   }
 
   const whereSql = buildWhereSql(where);
+  const sort = options.sortBy ? SESSION_SORT_SQL[options.sortBy] : null;
+  const sortOrder = options.sortOrder === "asc" ? "ASC" : "DESC";
+  const orderBySql = sort
+    ? [
+        `(${sort.expression} IS NULL)`,
+        `${sort.expression} ${sort.collation ?? ""} ${sortOrder}`.replace(/\s+/g, " ").trim(),
+        "(ended_at IS NULL)",
+        "ended_at DESC",
+        "session_id ASC"
+      ].join(",\n        ")
+    : [
+        "(COALESCE(ended_at, started_at) IS NULL)",
+        "COALESCE(ended_at, started_at) DESC",
+        "started_at DESC",
+        "session_id ASC"
+      ].join(",\n        ");
   const totalRow = database.prepare(`SELECT COUNT(*) as count FROM files ${whereSql}`).get(...params) as any;
   const rows = database
     .prepare(`
@@ -735,9 +767,7 @@ export async function listSessions(options: {
       FROM files
       ${whereSql}
       ORDER BY
-        (COALESCE(ended_at, started_at) IS NULL),
-        COALESCE(ended_at, started_at) DESC,
-        started_at DESC
+        ${orderBySql}
       LIMIT ? OFFSET ?
     `)
     .all(...params, limit, offset) as any[];

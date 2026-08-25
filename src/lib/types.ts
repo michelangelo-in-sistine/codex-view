@@ -44,6 +44,19 @@ export type SessionSummary = {
   tokensReasoningOutput: number;
 };
 
+export type SessionSortBy =
+  | "startedAt"
+  | "endedAt"
+  | "name"
+  | "durationSec"
+  | "cwd"
+  | "messages"
+  | "toolCalls"
+  | "errors"
+  | "tokensTotal";
+
+export type SortDirection = "asc" | "desc";
+
 export type WorkspaceAgg = {
   cwd: string;
   sessions: number;
