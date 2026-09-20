@@ -6,9 +6,11 @@ import useSWR from "swr";
 import {
   ArrowLeft,
   Bot,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  Copy,
   CornerRightUp,
   Hammer,
   MessageSquare,
@@ -249,14 +251,16 @@ function buildDisplayBlocks(events: DisplayEvent[]) {
 function EventText({
   kind,
   text,
-  emptyLabel
+  emptyLabel,
+  expanded,
+  onToggle
 }: {
   kind: "user" | "assistant" | "tool_call" | "tool_output" | "error" | "other";
   text: string;
   emptyLabel: string;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   if (!text) {
     return (
       <div className="rounded-lg border border-dashed border-[color:var(--line)] p-3 text-sm text-[var(--muted)]">
@@ -279,7 +283,7 @@ function EventText({
           aria-expanded={expanded}
           aria-label={expanded ? "折叠消息" : "展开消息"}
           title={expanded ? "折叠消息" : "展开消息"}
-          onClick={() => setExpanded((current) => !current)}
+          onClick={onToggle}
           className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/70 hover:text-[var(--ink)]"
         >
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -289,7 +293,7 @@ function EventText({
             type="button"
             aria-label="折叠消息"
             title="折叠消息"
-            onClick={() => setExpanded(false)}
+            onClick={onToggle}
             className="absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/70 hover:text-[var(--ink)]"
           >
             <CornerRightUp className="h-4 w-4" />
@@ -303,6 +307,44 @@ function EventText({
     <div className={`rounded-lg border p-3 text-sm text-[var(--ink)] ${bubbleClass(kind)}`}>
       <pre className="whitespace-pre-wrap break-words font-sans">{text}</pre>
     </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyText() {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={copied ? "已复制" : "复制全部文本"}
+      title={copied ? "已复制" : "复制全部文本"}
+      onClick={copyText}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-[var(--panel)] hover:text-[var(--ink)]"
+    >
+      {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+    </button>
   );
 }
 
@@ -326,8 +368,9 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
     fetchJson
   );
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [toolsCollapsedByDefault, setToolsCollapsedByDefault] = useState(true);
-  const [toolCollapseOverrides, setToolCollapseOverrides] = useState<Record<string, boolean>>({});
+  const [allExpandedByDefault, setAllExpandedByDefault] = useState(false);
+  const [groupExpandOverrides, setGroupExpandOverrides] = useState<Record<string, boolean>>({});
+  const [contentExpandOverrides, setContentExpandOverrides] = useState<Record<string, boolean>>({});
 
   const displayEvents = useMemo(() => attachTokenCounters(data?.events ?? []), [data?.events]);
   const displayBlocks = useMemo(() => buildDisplayBlocks(displayEvents), [displayEvents]);
@@ -352,8 +395,9 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     setFilters(DEFAULT_FILTERS);
-    setToolsCollapsedByDefault(true);
-    setToolCollapseOverrides({});
+    setAllExpandedByDefault(false);
+    setGroupExpandOverrides({});
+    setContentExpandOverrides({});
   }, [sessionId]);
 
   const counts = useMemo(() => {
@@ -391,25 +435,46 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
     });
   }, [displayBlocks, filters]);
 
-  function isGroupCollapsed(groupKey: string) {
-    return toolCollapseOverrides[groupKey] ?? toolsCollapsedByDefault;
+  function isGroupExpanded(key: string) {
+    return groupExpandOverrides[key] ?? allExpandedByDefault;
   }
 
-  function setAllToolGroupsCollapsed(collapsed: boolean) {
-    setToolsCollapsedByDefault(collapsed);
-    setToolCollapseOverrides({});
+  function setAllExpanded(expanded: boolean) {
+    setAllExpandedByDefault(expanded);
+    setGroupExpandOverrides({});
+    setContentExpandOverrides({});
   }
 
-  function toggleGroupCollapsed(groupKey: string) {
-    setToolCollapseOverrides((current) => {
-      const collapsed = current[groupKey] ?? toolsCollapsedByDefault;
-      const next = !collapsed;
+  function isContentExpanded(key: string) {
+    return contentExpandOverrides[key] ?? allExpandedByDefault;
+  }
+
+  function toggleGroupExpanded(key: string) {
+    setGroupExpandOverrides((current) => {
+      const expanded = current[key] ?? allExpandedByDefault;
+      const next = !expanded;
       const updated = { ...current };
 
-      if (next === toolsCollapsedByDefault) {
-        delete updated[groupKey];
+      if (next === allExpandedByDefault) {
+        delete updated[key];
       } else {
-        updated[groupKey] = next;
+        updated[key] = next;
+      }
+
+      return updated;
+    });
+  }
+
+  function toggleContentExpanded(key: string) {
+    setContentExpandOverrides((current) => {
+      const expanded = current[key] ?? allExpandedByDefault;
+      const next = !expanded;
+      const updated = { ...current };
+
+      if (next === allExpandedByDefault) {
+        delete updated[key];
+      } else {
+        updated[key] = next;
       }
 
       return updated;
@@ -516,19 +581,19 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setAllToolGroupsCollapsed(false)}
+                onClick={() => setAllExpanded(true)}
                 className="inline-flex h-10 items-center gap-2 rounded-md border border-[color:var(--line)] bg-white px-3 text-sm text-[var(--muted)] transition-colors hover:border-[color:var(--line-strong)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
               >
                 <ChevronDown className="h-4 w-4" />
-                <span>展开全部工具</span>
+                <span>展开全部</span>
               </button>
               <button
                 type="button"
-                onClick={() => setAllToolGroupsCollapsed(true)}
+                onClick={() => setAllExpanded(false)}
                 className="inline-flex h-10 items-center gap-2 rounded-md border border-[color:var(--line)] bg-white px-3 text-sm text-[var(--muted)] transition-colors hover:border-[color:var(--line-strong)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
               >
                 <ChevronRight className="h-4 w-4" />
-                <span>折叠全部工具</span>
+                <span>折叠全部</span>
               </button>
             </div>
           ) : null}
@@ -560,7 +625,10 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
                       />
                       <span>{kindLabel(block.kind)}</span>
                     </div>
-                    <div className="mono text-xs text-[var(--muted)]">{formatDateTime(event.ts)}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="mono text-xs text-[var(--muted)]">{formatDateTime(event.ts)}</div>
+                      {block.kind !== "other" ? <CopyButton text={event.text ?? ""} /> : null}
+                    </div>
                   </div>
 
                   <div className="mt-3">
@@ -568,6 +636,8 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
                       kind={block.kind}
                       text={event.text ?? ""}
                       emptyLabel={block.kind === "error" ? "无错误详情。" : "无文本内容。"}
+                      expanded={isContentExpanded(`${block.kind}-${event.ts}-${index}`)}
+                      onToggle={() => toggleContentExpanded(`${block.kind}-${event.ts}-${index}`)}
                     />
                   </div>
 
@@ -579,7 +649,7 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
             const assistantBlock = block as Extract<DisplayBlock, { kind: "assistant_group" }>;
             const assistantVisible = Boolean(assistantBlock.assistant) && filters.assistant;
             const tools = filters.tool ? assistantBlock.tools : [];
-            const toolsCollapsed = isGroupCollapsed(assistantBlock.key);
+            const groupExpanded = isGroupExpanded(assistantBlock.key);
             const groupTs =
               assistantBlock.assistant?.ts ??
               tools[0]?.call?.ts ??
@@ -601,15 +671,20 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
                     {tools.length ? (
                       <button
                         type="button"
-                        onClick={() => toggleGroupCollapsed(assistantBlock.key)}
+                        onClick={() => toggleGroupExpanded(assistantBlock.key)}
                         className="inline-flex h-8 items-center gap-2 rounded-md border border-[color:var(--line)] bg-white px-3 text-xs font-medium text-[var(--muted)] transition-colors hover:border-[color:var(--line-strong)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
                       >
-                        {toolsCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        <span>{toolsCollapsed ? `展开工具 ${formatInt(tools.length)}` : `折叠工具 ${formatInt(tools.length)}`}</span>
+                        {groupExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <span>{groupExpanded ? `折叠工具 ${formatInt(tools.length)}` : `展开工具 ${formatInt(tools.length)}`}</span>
                       </button>
                     ) : null}
                   </div>
-                  <div className="mono text-xs text-[var(--muted)]">{formatDateTime(groupTs)}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="mono text-xs text-[var(--muted)]">{formatDateTime(groupTs)}</div>
+                    {assistantVisible && assistantBlock.assistant ? (
+                      <CopyButton text={assistantBlock.assistant.text ?? ""} />
+                    ) : null}
+                  </div>
                 </div>
 
                 {assistantVisible && assistantBlock.assistant ? (
@@ -618,12 +693,14 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
                       kind="assistant"
                       text={assistantBlock.assistant.text ?? ""}
                       emptyLabel="无文本内容。"
+                      expanded={isContentExpanded(`${assistantBlock.key}-assistant`)}
+                      onToggle={() => toggleContentExpanded(`${assistantBlock.key}-assistant`)}
                     />
                     <TokenUsageMeta usage={assistantBlock.assistant.tokenUsageMeta} />
                   </div>
                 ) : null}
 
-                {tools.length && !toolsCollapsed ? (
+                {tools.length && groupExpanded ? (
                   <div className="mt-4 space-y-3">
                     {tools.map((tool: ToolPair, toolIndex: number) => {
                       const callTs = tool.call?.ts ?? "—";
@@ -640,22 +717,43 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
                               <span>{tool.name}</span>
                               {tool.callId ? <span className="mono text-[10px] text-amber-700">{tool.callId}</span> : null}
                             </div>
-                            <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
-                              <span className="mono">调用 {formatDateTime(callTs)}</span>
-                              <span className="mono">输出 {formatDateTime(outputTs)}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
+                                <span className="mono">调用 {formatDateTime(callTs)}</span>
+                                <span className="mono">输出 {formatDateTime(outputTs)}</span>
+                              </div>
+                              <CopyButton
+                                text={[
+                                  `工具：${tool.name}`,
+                                  `调用：\n${tool.call?.text ?? "无调用参数。"}`,
+                                  `输出：\n${tool.output?.text ?? "尚未记录工具输出。"}`
+                                ].join("\n\n")}
+                              />
                             </div>
                           </div>
 
                           <div className="mt-3 grid gap-3 xl:grid-cols-2">
                             <div className="space-y-2">
                               <div className="text-xs font-medium text-[var(--muted)]">调用</div>
-                              <EventText kind="tool_call" text={tool.call?.text ?? ""} emptyLabel="无调用参数。" />
+                              <EventText
+                                kind="tool_call"
+                                text={tool.call?.text ?? ""}
+                                emptyLabel="无调用参数。"
+                                expanded={isContentExpanded(`${assistantBlock.key}-${tool.key}-call`)}
+                                onToggle={() => toggleContentExpanded(`${assistantBlock.key}-${tool.key}-call`)}
+                              />
                               <TokenUsageMeta usage={tool.call?.tokenUsageMeta} />
                             </div>
 
                             <div className="space-y-2">
                               <div className="text-xs font-medium text-[var(--muted)]">输出</div>
-                              <EventText kind="tool_output" text={tool.output?.text ?? ""} emptyLabel="尚未记录工具输出。" />
+                              <EventText
+                                kind="tool_output"
+                                text={tool.output?.text ?? ""}
+                                emptyLabel="尚未记录工具输出。"
+                                expanded={isContentExpanded(`${assistantBlock.key}-${tool.key}-output`)}
+                                onToggle={() => toggleContentExpanded(`${assistantBlock.key}-${tool.key}-output`)}
+                              />
                               <TokenUsageMeta usage={tool.output?.tokenUsageMeta} />
                             </div>
                           </div>
@@ -665,7 +763,7 @@ export default function SessionTimeline({ sessionId }: { sessionId: string }) {
                   </div>
                 ) : null}
 
-                {tools.length && toolsCollapsed ? (
+                {tools.length && !groupExpanded ? (
                   <div className="mt-4 rounded-lg border border-dashed border-[color:var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--muted)]">
                     已折叠 {formatInt(tools.length)} 个工具调用
                   </div>
