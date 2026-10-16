@@ -78,8 +78,12 @@ export default function SessionsTable() {
     return `/api/sessions?${searchParams.toString()}`;
   }, [filters, limit, offset, onlyWithErrors, onlyWithTools, query, sorting]);
 
-  const { data, error, isLoading } = useSWR<SessionsListResponse>(key, fetchJson, {
-    refreshInterval: 15_000
+  const { data, error } = useSWR<SessionsListResponse>(key, fetchJson, {
+    refreshInterval: 15_000,
+    // Keep the table (and, crucially, the search input) mounted while a new
+    // query is being fetched. Otherwise every keystroke replaces the whole
+    // section with the loading state and the input loses focus.
+    keepPreviousData: true
   });
   const hasRangeFilter = Boolean(filters.start || filters.end);
   const hasAnyFilter = hasRangeFilter || onlyWithErrors || onlyWithTools || query.trim();
@@ -92,7 +96,7 @@ export default function SessionsTable() {
     setOffset(0);
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <section className="surface p-4 text-sm text-red-700">
         会话列表加载失败：{String(error)}
@@ -100,7 +104,7 @@ export default function SessionsTable() {
     );
   }
 
-  if (isLoading || !data) {
+  if (!data) {
     return (
       <section className="surface p-4 text-sm text-[var(--muted)]">
         正在加载会话列表...
